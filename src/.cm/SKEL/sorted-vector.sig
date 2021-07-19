@@ -1,2 +1,0 @@
-Skeleton 5
-d2ac"SORTED_VECTOR_ELEM"è0ac"SORTED_VECTOR"ÿ
