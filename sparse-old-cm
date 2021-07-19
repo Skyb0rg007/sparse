@@ -1,0 +1,35 @@
+Group
+    (* signature SORTED_VECTOR_ELEM *)
+    (* signature SORTED_VECTOR *)
+    (* functor SortedVectorFn *)
+
+    (* signature SPARSE_INPUT *)
+    (* signature SPARSE *)
+    (* functor SparseFn *)
+
+    (* structure StringInput *)
+
+    (* functor SparseExtrasFn *)
+    (* signature SPARSE_EXTRAS *)
+
+    (* signature SPARSE_CHAR_EXTRAS *)
+    (* functor SparseCharExtrasFn *)
+
+    (* signature SPARSE_LEX *)
+    (* functor SparseLexFn *)
+is
+    src/compat.sig
+    src/compat-smlofnj.sml
+    src/sorted-vector.sig
+    src/sorted-vector.fun
+    src/sparse.sig
+    src/sparse.fun
+    src/string-input.sml
+    src/extras.sig
+    src/extras.fun
+    src/char-extras.sig
+    src/char-extras.fun
+    src/lex.sig
+    src/lex.sml
+    $/basis.cm
+    $/smlnj-lib.cm

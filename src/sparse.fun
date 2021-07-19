@@ -1,54 +1,26 @@
-
-functor SparseFn(S : SPARSE_INPUT)
-    :> SPARSE where type input = S.input
-                and type token = S.token
-                and type tokens = S.tokens
-                and type custom_error = S.custom_error =
+(* vim: set ft=sml: *)
+functor SparsePrimFn(S : SPARSE_STRUCTS) :> SPARSE
+        where type Input.t = S.Input.t
+          and type Token.t = S.Token.t
+          and type Chunk.t = S.Chunk.t
+          and type CustomError.t = S.CustomError.t =
 struct
-    type input = S.input
-    type token = S.token
-    type tokens = S.tokens
-    type custom_error = S.custom_error
-
-    structure Token =
-    struct
-        type t = token
-        val compare = S.tokenCompare
-    end
-
-    structure Tokens =
-    struct
-        type t = tokens
-        val compare = S.chunkCompare
-        val fromTokens = S.tokensToChunk
-        val fromToken = S.tokenToChunk
-        val toTokens = S.chunkToTokens
-        val length = S.chunkLength
-        val isEmpty = S.chunkEmpty
-    end
-
-    structure Input =
-    struct
-        type t = input
-        val takeN = S.takeN
-        val take1 = S.take1
-        val takeWhile = S.takeWhile
-    end
+    open S
 
     structure ErrorItem : sig
         datatype t =
-            Tokens of token list
+            Tokens of Token.t list
           | Label of string
           | EndOfInput
 
         val compare : t * t -> order
     end = struct
         datatype t =
-            Tokens of token list
+            Tokens of Token.t list
           | Label of string
           | EndOfInput
 
-        fun compare (Tokens t1, Tokens t2) = List.collate S.tokenCompare (t1, t2)
+        fun compare (Tokens t1, Tokens t2) = List.collate Token.compare (t1, t2)
           | compare (Tokens _, Label _) = LESS
           | compare (Tokens _, EndOfInput) = LESS
           | compare (Label _, Tokens _) = GREATER
@@ -59,22 +31,26 @@ struct
           | compare (EndOfInput, EndOfInput) = EQUAL
     end
 
-    structure ErrorItemSet = SortedVectorFn(ErrorItem)
+    structure ErrorItemSet = ListSetFn(
+        struct
+            type ord_key = ErrorItem.t
+            val compare = ErrorItem.compare
+        end)
 
     structure Error : sig
         datatype t =
-            Fancy of { offset: int, error: custom_error }
-          | Trivial of { offset: int, unexpected: ErrorItem.t option, expected: ErrorItemSet.t }
+            Fancy of { offset: int, error: CustomError.t }
+          | Trivial of { offset: int, unexpected: ErrorItem.t option, expected: ErrorItemSet.set }
 
         val offset : t -> int
         val merge : t * t -> t
     end = struct
         datatype t =
-            Fancy of { offset: int, error: custom_error }
-          | Trivial of { offset: int, unexpected: ErrorItem.t option, expected: ErrorItemSet.t }
+            Fancy of { offset: int, error: CustomError.t }
+          | Trivial of { offset: int, unexpected: ErrorItem.t option, expected: ErrorItemSet.set }
 
-        fun offset (Fancy x) = #offset x
-          | offset (Trivial x) = #offset x
+        fun offset (Fancy {offset,...}) = offset
+          | offset (Trivial {offset,...}) = offset
 
         fun optMerge (NONE, y) = y
           | optMerge (x, NONE) = x
@@ -94,23 +70,24 @@ struct
                                      unexpected=optMerge (u1, u2),
                                      expected=ErrorItemSet.union (p1, p2)}
                       | (Fancy {offset, error=x1}, Fancy {error=x2,...}) =>
-                            Fancy {offset=offset, error=S.customErrorMerge (x1, x2)}
+                            Fancy {offset=offset, error=CustomError.merge (x1, x2)}
                       | (Fancy _, Trivial _) => e1
                       | (Trivial _, Fancy _) => e2
     end
 
     structure State : sig
         type t
-        val initial : S.input -> t
+        val initial : Input.t -> t
         val offset : t -> int
-        val input : t -> S.input
+        val input : t -> Input.t
         val errors : t -> Error.t list
-        val advance : t * S.input * int -> t
+        val updateInput : (Input.t -> Input.t) -> t -> t
+        val advance : t * Input.t * int -> t
         val registerError : t * Error.t -> t
         val max : t * t -> t
     end = struct
         type t = {
-            input: S.input,
+            input: Input.t,
             offset: int,
             errors: Error.t list
         }
@@ -118,6 +95,11 @@ struct
         fun offset ({offset = x, ...} : t) = x
         fun input ({input = x, ...} : t) = x
         fun errors ({errors = x, ...} : t) = x
+
+        fun updateInput f {input,offset,errors} =
+            {input = f input,
+             offset = offset,
+             errors = errors}
 
         fun advance ({input = _, offset,errors}, input, incr) =
             {input = input,
@@ -142,16 +124,16 @@ struct
         type t
         val empty : t
         val fromError : int * Error.t -> t
-        val withHints : ErrorItemSet.t list * (Error.t * State.t -> unit) -> Error.t * State.t -> unit
+        val withHints : ErrorItemSet.set list * (Error.t * State.t -> unit) -> Error.t * State.t -> unit
         val accHints : t * ('a * State.t * t -> unit) -> 'a * State.t * t -> unit
-        val refreshLast : ErrorItemSet.t list * ErrorItem.t option -> t
+        val refreshLast : ErrorItemSet.set list * ErrorItem.t option -> t
     end = struct
-        type t = ErrorItemSet.t list
+        type t = ErrorItemSet.set list
 
         val empty = []
 
         fun fromError (streamOffset, Error.Trivial {offset=errOffset, expected=ps, ...}) =
-              if streamOffset = errOffset andalso not (ErrorItemSet.null ps)
+              if streamOffset = errOffset andalso not (ErrorItemSet.isEmpty ps)
                 then [ps]
                 else []
           | fromError (streamOffset, Error.Fancy _) = []
@@ -162,7 +144,7 @@ struct
                | Error.Trivial {offset, unexpected, expected} =>
                    c (Error.Trivial {offset=offset,
                                      unexpected=unexpected,
-                                     expected=ErrorItemSet.unions (expected :: ps')}, s)
+                                     expected=List.foldl ErrorItemSet.union ErrorItemSet.empty (expected :: ps')}, s)
 
         fun accHints (hs, k) = fn (x, s, hs') => k (x, s, hs @ hs')
 
@@ -179,16 +161,17 @@ struct
     type 'a err = Error.t * State.t -> unit
     type 'a t = State.t * 'a ok * 'a err * 'a ok * 'a err -> unit
 
-    fun parse (p, input) = Compat.callec (fn k =>
+    fun parse (p, input) = SMLofNJ.Cont.callcc (fn k =>
         let val s = State.initial input
-            fun errCmp (a, b) = Int.compare (Error.offset a, Error.offset b)
-            val sortErrs = Compat.sort errCmp
+            fun errGt (a, b) = Error.offset a > Error.offset b
+            val sortErrs = ListMergeSort.sort errGt
             fun ok (x, s, _) =
                 case State.errors s of
-                     [] => k (Success x)
-                   | de => k (Failure (sortErrs de))
-            fun err (err, s) = k (Failure (sortErrs (err :: State.errors s)))
-        in  p (s, ok, err, ok, err)
+                     [] => SMLofNJ.Cont.throw k (Success x)
+                   | de => SMLofNJ.Cont.throw k (Failure (sortErrs de))
+            fun err (err, s) = SMLofNJ.Cont.throw k (Failure (sortErrs (err :: State.errors s)))
+        in  p (s, ok, err, ok, err);
+            raise Fail ""
         end)
 
     fun map f p = fn (s, cok, cerr, eok, eerr) =>
@@ -200,7 +183,7 @@ struct
 
     fun pure x = fn (s, _, _, eok, _) => eok (x, s, Hints.empty)
 
-    fun ap (m, k) = fn (s, cok, cerr, eok, eerr) =>
+    fun ap m k = fn (s, cok, cerr, eok, eerr) =>
         let fun mcok (x, s', hs) =
                 let fun cok' (y, s, hs) = cok (x y, s, hs)
                 in  k (s',
@@ -278,7 +261,7 @@ struct
         end
 
     fun notFollowedBy p = fn (s, _, _, eok, eerr) =>
-        let val what = case S.take1 (State.input s) of
+        let val what = case Input.take1 (State.input s) of
                             NONE => ErrorItem.EndOfInput
                           | SOME (tok, _) => ErrorItem.Tokens [tok]
             fun unexpect u = Error.Trivial {offset=State.offset s, unexpected=SOME u, expected=ErrorItemSet.empty}
@@ -314,7 +297,7 @@ struct
         end
 
     val eof = fn (s, _, _, eok, eerr) =>
-        case S.take1 (State.input s) of
+        case Input.take1 (State.input s) of
              NONE => eok ((), s, Hints.empty)
            | SOME (x, _) =>
                let val us = SOME (ErrorItem.Tokens [x])
@@ -323,7 +306,7 @@ struct
                end
 
     fun token test ps = fn (s, cok, _, _, eerr) =>
-        case S.take1 (State.input s) of
+        case Input.take1 (State.input s) of
              NONE => eerr (Error.Trivial {offset=State.offset s, unexpected=SOME ErrorItem.EndOfInput, expected=ps}, s)
            | SOME (c, cs) =>
                case test c of
@@ -333,39 +316,39 @@ struct
                       cok (x, State.advance (s, cs, 1), Hints.empty)
 
     fun tokens eq tts = fn (s, cok, _, eok, eerr) =>
-        let val len = S.chunkLength tts
+        let val len = Chunk.length tts
             fun unexpect (pos, u) =
-                Error.Trivial {offset=pos, unexpected=SOME u, expected=ErrorItemSet.singleton (ErrorItem.Tokens (S.chunkToTokens tts))}
-        in  case S.takeN (len, State.input s) of
+                Error.Trivial {offset=pos, unexpected=SOME u, expected=ErrorItemSet.singleton (ErrorItem.Tokens (Chunk.toTokens tts))}
+        in  case Input.takeN (len, State.input s) of
                  NONE => eerr (unexpect (State.offset s, ErrorItem.EndOfInput), s)
                | SOME (tts', input') =>
                    if eq (tts, tts')
                      then let val st = State.advance (s, input', len)
-                          in  if S.chunkEmpty tts
+                          in  if Chunk.isEmpty tts
                                 then eok (tts', st, Hints.empty)
                                 else cok (tts', st, Hints.empty)
                           end
-                     else let val ps = ErrorItem.Tokens (S.chunkToTokens tts')
+                     else let val ps = ErrorItem.Tokens (Chunk.toTokens tts')
                           in  eerr (unexpect (State.offset s, ps), s)
                           end
         end
 
     fun takeWhileP ml f = fn (s, cok, _, eok, _) =>
-        let val (ts, input') = S.takeWhile f (State.input s)
-            val len = S.chunkLength ts
+        let val (ts, input') = Input.takeWhile f (State.input s)
+            val len = Chunk.length ts
             val hs =
                 case ml of
                      NONE => Hints.empty
                    | SOME "" => Hints.empty
                    | SOME l => [ErrorItemSet.singleton (ErrorItem.Label l)]
-        in  if S.chunkEmpty ts
+        in  if Chunk.isEmpty ts
               then eok (ts, State.advance (s, input', len), hs)
               else cok (ts, State.advance (s, input', len), hs)
         end
 
     fun takeWhile1P ml f = fn (s, cok, _, _, eerr) =>
-        let val (ts, input') = S.takeWhile f (State.input s)
-            val len = S.chunkLength ts
+        let val (ts, input') = Input.takeWhile f (State.input s)
+            val len = Chunk.length ts
             val el =
                 case ml of
                      NONE => NONE
@@ -376,8 +359,8 @@ struct
                      NONE => Hints.empty
                    | SOME "" => Hints.empty
                    | SOME l => [ErrorItemSet.singleton (ErrorItem.Label l)]
-        in  if S.chunkEmpty ts
-              then let val us = case S.take1 (State.input s) of
+        in  if Chunk.isEmpty ts
+              then let val us = case Input.take1 (State.input s) of
                                    NONE => ErrorItem.EndOfInput
                                  | SOME (t, _) => ErrorItem.Tokens [t]
                        val ps = case el of NONE => ErrorItemSet.empty | SOME x => ErrorItemSet.singleton x
@@ -396,10 +379,10 @@ struct
                 case el of
                      NONE => ErrorItemSet.empty
                    | SOME x => ErrorItemSet.singleton x
-        in  case S.takeN (n, State.input s) of
+        in  case Input.takeN (n, State.input s) of
                  NONE => eerr (Error.Trivial {offset=State.offset s, unexpected=SOME ErrorItem.EndOfInput, expected=ps}, s)
                | SOME (ts, input') =>
-                   let val len = S.chunkLength ts
+                   let val len = Chunk.length ts
                    in  if len = n
                          then cok (ts, State.advance (s, input', len), Hints.empty)
                          else eerr (Error.Trivial {offset=State.offset s + len, unexpected=SOME ErrorItem.EndOfInput, expected=ps}, s)
@@ -418,4 +401,164 @@ struct
 
     val getInput = fn (s, _, _, eok, _) =>
         eok (State.input s, s, Hints.empty)
+
+    fun updateInput f = fn (s, _, _, eok, _) =>
+        eok ((), State.updateInput f s, Hints.empty)
+
+    (* Derived functions *)
+
+    fun failure (us, ps) =
+        >>= (getOffset, fn offset =>
+        parseError (Error.Trivial {offset = offset, unexpected = us, expected = ps}))
+
+    fun customFailure e =
+        >>= (getOffset, fn offset =>
+        parseError (Error.Fancy {offset = offset, error = e}))
+
+    fun unexpected item = failure (SOME item, ErrorItemSet.empty)
+
+    fun registerFailure (us, ps) =
+        >>= (getOffset, fn offset =>
+        registerError (Error.Trivial {offset = offset, unexpected = us, expected = ps}))
+
+    fun registerCustomFailure e =
+        >>= (getOffset, fn offset =>
+        registerError (Error.Fancy {offset = offset, error = e}))
+
+    fun single t =
+        let fun test x =
+                case Token.compare (x, t) of
+                     EQUAL => SOME x
+                   | _     => NONE
+            val expected = ErrorItemSet.singleton (ErrorItem.Tokens [t])
+        in  token test expected
+        end
+
+    fun satisfy f =
+        let fun test x = if f x then SOME x else NONE
+        in  token test ErrorItemSet.empty
+        end
+
+    fun anySingle args = satisfy (fn _ => true) args
+
+    fun anySingleBut t = satisfy (fn x => Token.compare (x, t) <> EQUAL)
+
+    fun oneOf ts = satisfy (fn x => List.exists (fn t => Token.compare (x, t) = EQUAL) ts)
+
+    fun noneOf ts = satisfy (fn x => List.all (fn t => Token.compare (x, t) <> EQUAL) ts)
+
+    fun chunk ts = tokens (fn (a, b) => Chunk.compare (a, b) = EQUAL) ts
+
+    fun match p =
+        >>= (getOffset, fn offset =>
+        >>= (getInput, fn input =>
+        >>= (p, fn r =>
+        >>= (getOffset, fn offset' =>
+        pure (#1 (valOf (Input.takeN (offset' - offset, input))), r)))))
+
+    fun rest args = takeWhileP NONE (fn _ => true) args
+
+    fun atEnd args = <|> (map (fn _ => true) eof, pure false) args
+
+    fun void p = map (fn _ => ()) p
+
+    fun map2 f p1 p2 =
+        >>= (p1, fn a =>
+        >>= (p2, fn b =>
+        pure (f (a, b))))
+
+    fun << (p1, p2) =
+        >>= (p1, fn r =>
+        >>= (p2, fn _ =>
+        pure r))
+
+    fun >> (p1, p2) =
+        >>= (p1, fn _ =>
+        >>= (p2, fn r =>
+        pure r))
+
+    fun optional p = <|> (map SOME p, pure NONE)
+
+    fun between a b c =
+        >>= (a, fn _ =>
+        >>= (c, fn r =>
+        >>= (b, fn _ =>
+        pure r)))
+
+    fun choice ps = List.foldl <|> empty ps
+
+    fun count (n, p) =
+        let fun go n =
+                if n <= 0 then pure []
+                else map2 op :: p (go (n - 1))
+        in  go n
+        end
+
+    fun count' (m, n, p) =
+        let fun go (m, n) =
+                if n <= 0 orelse m > n then pure []
+                else if m > 0 then map2 op :: p (go (m-1, n-1))
+                else <|> (map2 op :: p (go (0, n-1)), pure [])
+        in  go (m, n)
+        end
+
+    fun many p = fix (fn ps =>
+        <|> (>>= (p, fn x => >>= (ps, fn xs => pure (x::xs))), pure []))
+
+    fun some p = map2 op :: p (many p)
+
+    fun endBy p sep = many (<< (p, sep))
+    fun endBy1 p sep = some (<< (p, sep))
+
+    fun manyTill p e = fix (fn ps =>
+        <|> (map (fn _ => []) e,
+             map2 op :: p ps))
+
+    fun someTill p e = map2 op :: p (manyTill p e)
+
+    fun option (x, p) = <|> (p, pure x)
+
+    fun sepBy1 p sep = map2 op :: p (many (>> (sep, p)))
+
+    fun sepBy p sep = <|> (sepBy1 p sep, pure [])
+
+    fun sepEndBy1 p sep = map2 op :: p (<|> (>> (sep, sepEndBy p sep), pure []))
+
+    and sepEndBy p sep = <|> (sepEndBy1 p sep, pure [])
+
+    fun skipMany p = fix (fn p' => <|> ( >> (p, p'), pure ()))
+
+    fun skipSome p = >> (p, skipMany p)
+
+    fun skipManyTill p e = fix (fn p' => <|> (e, >> (p, p')))
+
+    fun skipSomeTill p e = >> (p, skipManyTill p e)
+
+    fun <*> (p1, p2) = ap p1 p2
+
+    fun bind p f = >>= (p, f)
+
+    fun =<< (f, p) = >>= (p, f)
+
+    fun >=> (f, g) x = >>= (f x, g)
+
+    fun <=< (g, f) = >=> (f, g)
+
+    fun <$> (f, p) = map f p
+
+    fun <$ (x, p) = map (fn _ => x) p
+
+    fun $> (p, x) = <$ (x, p)
+
+    fun traverse f xs = List.foldl (fn (x, ys) => map2 op :: (f x) ys) (pure []) xs
+
+    fun sequence xs = List.foldl (fn (x, ys) => map2 op :: x ys) (pure []) xs
+
+    fun join p = >>= (p, fn p' => p')
+
+    fun zipWith f xs ys =
+        ListPair.foldlEq
+        (fn (x, y, zs) => map2 op :: (f (x, y)) zs)
+        (pure [])
+        (xs, ys)
 end

@@ -1,37 +1,13 @@
 local
     $(SML_LIB)/basis/basis.mlb
-    src/compat.sig
-    local
-        $(SML_LIB)/basis/mlton.mlb
-        $(SML_LIB)/smlnj-lib/Util/smlnj-lib.mlb
-    in
-        src/compat-mlton.sml
-    end
-    src/sorted-vector.sig
-    src/sorted-vector.fun
+    $(SML_LIB)/basis/sml-nj.mlb
+    $(SML_LIB)/smlnj-lib/Util/smlnj-lib.mlb
     src/sparse.sig
     src/sparse.fun
-    src/extras.sig
-    src/extras.fun
-    src/char-extras.sig
-    src/char-extras.fun
+    src/string-input.sml
+    src/char.sig
+    src/char.fun
     src/lex.sig
-    src/lex.sml
+    src/char-lex.fun
 in
-    signature SORTED_VECTOR
-    signature SORTED_VECTOR_ELEM
-    functor SortedVectorFn
-
-    signature SPARSE_INPUT
-    signature SPARSE
-    functor SparseFn
-
-    signature SPARSE_EXTRAS
-    functor SparseExtrasFn
-
-    signature SPARSE_CHAR_EXTRAS
-    functor SparseCharExtrasFn
-
-    signature SPARSE_LEX
-    functor SparseLexFn
 end
