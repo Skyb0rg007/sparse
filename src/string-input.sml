@@ -1,5 +1,5 @@
 
-structure StringInput : SPARSE_STRUCTS =
+structure SparseStringInput : SPARSE_STRUCTS =
 struct
     structure Token =
     struct
@@ -43,6 +43,8 @@ struct
         type t = string list
         val compare = List.collate String.compare
         val merge = List.@
+        val toString = String.concatWith "\n"
+        val length = fn _ => 1
     end
 end
 

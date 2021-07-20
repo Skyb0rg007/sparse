@@ -1,5 +1,5 @@
 (* vim: set ft=sml: *)
-functor SparsePrimFn(S : SPARSE_STRUCTS) :> SPARSE
+functor SparseFn(S : SPARSE_STRUCTS) :> SPARSE
         where type Input.t = S.Input.t
           and type Token.t = S.Token.t
           and type Chunk.t = S.Chunk.t
@@ -14,6 +14,7 @@ struct
           | EndOfInput
 
         val compare : t * t -> order
+        val toString : t -> string
     end = struct
         datatype t =
             Tokens of Token.t list
@@ -29,6 +30,10 @@ struct
           | compare (EndOfInput, Tokens _) = GREATER
           | compare (EndOfInput, Label _) = GREATER
           | compare (EndOfInput, EndOfInput) = EQUAL
+
+        fun toString (Tokens ts) = Chunk.toString (Chunk.fromTokens ts)
+          | toString (Label lbl) = lbl
+          | toString EndOfInput = "end of input"
     end
 
     structure ErrorItemSet = ListSetFn(
@@ -44,6 +49,8 @@ struct
 
         val offset : t -> int
         val merge : t * t -> t
+        val toString : t -> string
+        val textToString : t -> string
     end = struct
         datatype t =
             Fancy of { offset: int, error: CustomError.t }
@@ -73,6 +80,25 @@ struct
                             Fancy {offset=offset, error=CustomError.merge (x1, x2)}
                       | (Fancy _, Trivial _) => e1
                       | (Trivial _, Fancy _) => e2
+
+        fun orList [] = raise Fail ""
+          | orList [x] = ErrorItem.toString x
+          | orList [x, y] = ErrorItem.toString x ^ " or " ^ ErrorItem.toString y
+          | orList xs =
+            let val init = List.take (xs, List.length xs - 1)
+                val last = List.last xs
+            in  String.concatWith ", " (List.map ErrorItem.toString init) ^ ", or " ^ ErrorItem.toString last
+            end
+
+        fun textToString (Trivial {unexpected,expected,...}) =
+            (case (unexpected, ErrorItemSet.isEmpty expected) of
+                  (NONE, true) => "unknown parse error\n"
+                | (NONE, false) => "expecting " ^ orList (ErrorItemSet.toList expected) ^ "\n"
+                | (SOME u, true) => "unexpected " ^ ErrorItem.toString u ^ "\n"
+                | (SOME u, false) => "unexpected " ^ ErrorItem.toString u ^ "\nexpecting " ^ orList (ErrorItemSet.toList expected) ^ "\n")
+          | textToString (Fancy {error,...}) = CustomError.toString error
+
+        fun toString e = "offset=" ^ Int.toString (offset e) ^ ":\n" ^ textToString e
     end
 
     structure State : sig

@@ -8,7 +8,6 @@ sig
     sig
         type t
         val compare : t * t -> order
-        val toString : t -> string
     end
 
     (* Represents a group of tokens
@@ -44,6 +43,8 @@ sig
         type t
         val compare : t * t -> order
         val merge : t * t -> t
+        val length : t -> int
+        val toString : t -> string
     end
 end
 
@@ -81,6 +82,8 @@ sig
         val offset : t -> int
         (* Prefers errors with larger offsets, then Fancy over Trivial *)
         val merge : t * t -> t
+        val toString : t -> string
+        val textToString : t -> string
     end
 
     datatype ('e, 'a) result =
