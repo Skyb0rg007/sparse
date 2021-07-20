@@ -1,18 +1,16 @@
 
 signature SPARSE_STRUCTS =
 sig
-    (* The atomic unit of a parser
-     * The toString function is only used for debug output and can be stubbed
-     *)
+    (* The atomic unit of a parser *)
     structure Token :
     sig
         type t
         val compare : t * t -> order
+        val toString : t -> string
     end
 
     (* Represents a group of tokens
      * This is separate from a vector/list of tokens to allow for things like UTF8 support
-     * The toString function is only used for debug output and can be stubbed
      *)
     structure Chunk :
     sig
@@ -67,6 +65,7 @@ sig
           | EndOfInput
 
         val compare : t * t -> order
+        val toString : t -> string
     end
 
     structure ErrorItemSet : ORD_SET where type Key.ord_key = ErrorItem.t
@@ -80,8 +79,10 @@ sig
           | Trivial of { offset: int, unexpected: ErrorItem.t option, expected: ErrorItemSet.set }
 
         val offset : t -> int
+
         (* Prefers errors with larger offsets, then Fancy over Trivial *)
         val merge : t * t -> t
+
         val toString : t -> string
         val textToString : t -> string
     end

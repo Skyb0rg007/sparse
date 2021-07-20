@@ -15,10 +15,7 @@ val ident = P.label ("identifier", lexeme (
     P.>>= (P.many C.alphaNumChar, fn cs =>
     P.pure (String.implode (c::cs))))))
 
-val num = P.label ("number", lexeme (
-    P.map
-    (valOf o StringCvt.scanString (Int.scan StringCvt.DEC) o String.implode)
-    (P.some C.digitChar)))
+val num = P.label ("number", lexeme (P.map String.implode (P.some C.digitChar)))
 
 structure SExp =
 struct
@@ -26,7 +23,7 @@ struct
 
     val parse = P.fix (fn p =>
         P.choice
-        [ P.label ("atom", P.map Atom (P.<|> (P.map Int.toString num, ident)))
+        [ P.label ("atom", P.map Atom (P.<|> (num, ident)))
         , P.label ("list", P.map List (paren (P.many p)))
         ])
 
@@ -35,6 +32,9 @@ struct
 end
 
 val input = Substring.full (List.nth (CommandLine.arguments (), 0))
+    handle Subscript =>
+        (TextIO.print ("Usage: " ^ CommandLine.name () ^ " \"<input>\"\n");
+         OS.Process.exit OS.Process.failure)
 val () =
     case P.parse (SExp.parse, input) of
          P.Success x => TextIO.print (SExp.toString x ^ "\n")

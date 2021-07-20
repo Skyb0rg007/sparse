@@ -1,56 +1,8 @@
 (* vim: set ft=sml: *)
-
-structure SourcePos : sig
-    type t = {
-        name: string,
-        line: int,
-        column: int
-    }
-
-    type 's state = { 
-        input: 's,
-        offset: int,
-        sourcePos: t,
-        tabWidth: int,
-        linePrefix: string
-    }
-
-    val initial : 's * string -> 's state
-    val toString : t -> string
-end = struct
-    type t = {
-        name: string,
-        line: int,
-        column: int
-    }
-
-    type 'a state = { 
-        input: 'a,
-        offset: int,
-        sourcePos: t,
-        tabWidth: int,
-        linePrefix: string
-    }
-
-    fun initial (s, name) = {
-            input = s,
-            offset = 0,
-            sourcePos = { name = name, line = 1, column = 1 },
-            tabWidth = 4,
-            linePrefix = ""
-        }
-
-    fun toString {name,line,column} =
-        let val lc = Int.toString line ^ ":" ^ Int.toString column
-        in  if String.size name = 0 then lc else name ^ ":" ^ lc
-        end
-end
-
 functor SparseErrorPrettyFn(
     structure P : SPARSE
     val newlineTok : P.Token.t
     val tabTok : P.Token.t
-    val tokenToString : P.Token.t -> string
 ) : sig
     val reachOffset : int * P.Input.t SourcePos.state -> string * P.Input.t SourcePos.state
     val errorPretty : P.Error.t list * string * P.Input.t -> string
@@ -68,8 +20,8 @@ struct
                 if isNewline ch
                   then ({name=name,line=line+1,column=1}, "")
                 else if isTab ch
-                  then ({name=name,line=line,column=column + tabWidth - (Int.rem (column-1, tabWidth))}, s ^ tokenToString ch)
-                else ({name=name,line=line,column=column+1}, s ^ tokenToString ch)
+                  then ({name=name,line=line,column=column + tabWidth - (Int.rem (column-1, tabWidth))}, s ^ Token.toString ch)
+                else ({name=name,line=line,column=column+1}, s ^ Token.toString ch)
             val (spos, s) = List.foldl go (sourcePos, "") (Chunk.toTokens pre)
             val sameLine = #line spos = #line sourcePos
             fun addPrefix xs = if sameLine then linePrefix ^ xs else xs

@@ -1,4 +1,4 @@
-
+(* vim: set ft=sml: *)
 signature SPARSE_LEX =
 sig
     type 'a t

@@ -9,7 +9,8 @@ local
     src/char.fun
     src/lex.sig
     src/char-lex.fun
-    src/sourcepos.fun
+    src/sourcepos.sml
+    src/error-pretty.fun
 in
     signature SPARSE
     signature SPARSE_STRUCTS
@@ -19,9 +20,8 @@ in
     functor SparseFn
     functor SparseCharFn
     functor SparseCharLexFn
+    functor SparseErrorPrettyFn
 
     structure SparseStringInput
-
     structure SourcePos
-    functor SparseErrorPrettyFn
 end

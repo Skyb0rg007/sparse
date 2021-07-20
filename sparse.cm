@@ -1,6 +1,25 @@
-Group is
-    src/sparse.sig
+Library
+    signature SPARSE
+    signature SPARSE_STRUCTS
+    signature SPARSE_CHAR
+    signature SPARSE_LEX
+
+    functor SparseCharLexFn
+    functor SparseCharFn
+    functor SparseErrorPrettyFn
+    functor SparseFn
+    
+    structure SourcePos
+    structure SparseStringInput
+is
+    src/char-lex.fun
+    src/char.fun
+    src/char.sig
+    src/error-pretty.fun
+    src/lex.sig
+    src/sourcepos.sml
     src/sparse.fun
+    src/sparse.sig
     src/string-input.sml
     $/basis.cm
     $/smlnj-lib.cm

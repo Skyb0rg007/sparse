@@ -17,13 +17,9 @@ uses additional state to provide line+column information.
 
 ## SparseFn
 
-The main functor, creates the primitive parser combinators
+The main functor, creates the parser and combinators
 
-## SparseExtrasFn
-
-Creates the parser combinators you'd want for most tasks
-
-## SparseCharExtrasFn
+## SparseCharFn
 
 Creates combinators for working with character data
 
@@ -32,8 +28,9 @@ Creates combinators for working with character data
 Structure containing information for string-based parsers.
 Uses `Substring` as the input datatype.
 
-## SortedVectorFn
+## SparseLexFn
 
-Creates a set-like data structure backed by a `vector`. Use case is for
-small sets, so it is a very space-efficient representation.
+Creates combinators for working with lexeme-based parsers.
+
+## 
 
