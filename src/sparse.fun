@@ -511,7 +511,7 @@ struct
         >>= (b, fn _ =>
         pure r)))
 
-    fun choice ps = List.foldl <|> empty ps
+    fun choice ps = List.foldr <|> empty ps
 
     fun count (n, p) =
         let fun go n =
