@@ -20,9 +20,18 @@ struct
         fun isEmpty s = String.size s = 0
     end
 
+    structure Pos =
+    struct
+        type t = int
+
+        val compare = Int.compare
+    end
+
     structure Input =
     struct
         type t = substring
+
+        val pos = #2 o Substring.base
         val take1 = Substring.getc
         fun takeN (n, s) =
             let val len = Substring.size s

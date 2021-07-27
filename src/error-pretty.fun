@@ -1,6 +1,6 @@
 (* vim: set ft=sml: *)
 functor SparseErrorPrettyFn(
-    structure P : SPARSE
+    structure P : SPARSE where type Pos.t = int
     val newlineTok : P.Token.t
     val tabTok : P.Token.t
 ) : sig
@@ -36,7 +36,7 @@ struct
     val errorPretty : Error.t list * string * Input.t -> string =
         fn (errors, name, input) =>
         let fun f (error, (out, st)) =
-                let val (line, st') = reachOffset (Error.offset error, st)
+                let val (line, st') = reachOffset (Error.pos error, st)
                     val epos = #sourcePos st'
                     val rpshift = #column epos - 1
                     val lineNumber = Int.toString (#line epos)

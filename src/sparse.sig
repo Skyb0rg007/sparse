@@ -24,12 +24,20 @@ sig
         val toString : t -> string
     end
 
+    structure Pos :
+    sig
+        type t
+
+        val compare : t * t -> order
+    end
+
     (* Where the parser gets its data from
      * This type must be able to backtrack - these functions should be pure
      *)
     structure Input :
     sig
         type t
+        val pos : t -> Pos.t
         val take1 : t -> (Token.t * t) option
         val takeN : int * t -> (Chunk.t * t) option
         val takeWhile : (Token.t -> bool) -> t -> Chunk.t * t
@@ -75,15 +83,14 @@ sig
      *)
     structure Error : sig
         datatype t =
-            Fancy of { offset: int, error: CustomError.t }
-          | Trivial of { offset: int, unexpected: ErrorItem.t option, expected: ErrorItemSet.set }
+            Fancy of { pos: Pos.t, error: CustomError.t }
+          | Trivial of { pos: Pos.t, unexpected: ErrorItem.t option, expected: ErrorItemSet.set }
 
-        val offset : t -> int
+        val pos : t -> Pos.t
 
-        (* Prefers errors with larger offsets, then Fancy over Trivial *)
+        (* Prefers errors with larger positions, then Fancy over Trivial *)
         val merge : t * t -> t
 
-        val toString : t -> string
         val textToString : t -> string
     end
 
@@ -172,12 +179,12 @@ sig
     val oneOf : Token.t list -> Token.t t
     val noneOf : Token.t list -> Token.t t
     val chunk : Chunk.t -> Chunk.t t
-    val match : 'a t -> (Chunk.t * 'a) t
+    (* val match : 'a t -> (Chunk.t * 'a) t *)
     val rest : Chunk.t t
     val atEnd : bool t
 
     (* State *)
-    val getOffset : int t
+    val getPos : Pos.t t
     val getInput : Input.t t
     val updateInput : (Input.t -> Input.t) -> unit t
 end
